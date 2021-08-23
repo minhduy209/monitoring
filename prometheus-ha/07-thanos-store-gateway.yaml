@@ -1,0 +1,62 @@
+apiVersion: apps/v1beta1
+kind: StatefulSet
+metadata:
+  name: thanos-store-gateway
+  namespace: monitoring
+  labels:
+    app: thanos-store-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: thanos-store-gateway
+  serviceName: thanos-store-gateway
+  template:
+    metadata:
+      labels:
+        app: thanos-store-gateway
+        thanos-store-api: "true"
+    spec:
+      containers:
+        - name: thanos
+          image: quay.io/thanos/thanos:v0.9.0
+          args:
+          - "store"
+          - --grpc-address=0.0.0.0:10901
+          - --http-address=0.0.0.0:10902
+          - "--log.level=debug"
+          - "--data-dir=/data"
+          - "--objstore.config={type: GCS, config: {bucket: prometheus-long-term}}"
+          env:
+            - name : GOOGLE_APPLICATION_CREDENTIALS
+              value: /etc/secret/thanos-gcs-credentials.json
+          ports:
+          - name: http
+            containerPort: 10902
+          - name: grpc
+            containerPort: 10901
+          resources:
+            limits:
+              cpu: 1
+              memory: 8Gi
+            requests:
+              cpu: 0.5
+              memory: 1Gi
+          readinessProbe:
+            failureThreshold: 6
+            httpGet:
+              port: 10902
+              path: /-/ready
+            periodSeconds: 20
+            successThreshold: 1
+            timeoutSeconds: 5
+          terminationMessagePolicy: FallbackToLogsOnError
+          volumeMounts:
+            - name: thanos-gcs-credentials
+              mountPath: /etc/secret
+              readOnly: false
+      volumes:
+        - name: thanos-gcs-credentials
+          secret:
+            secretName: thanos-gcs-credentials
+---

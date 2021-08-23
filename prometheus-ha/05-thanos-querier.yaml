@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: thanos-querier
+  namespace: monitoring
+  labels:
+    app: thanos-querier
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: thanos-querier
+  template:
+    metadata:
+      labels:
+        app: thanos-querier
+    spec:
+      containers:
+      - name: thanos
+        image: quay.io/thanos/thanos:v0.9.0
+        args:
+        - query
+        - --log.level=debug
+        - --query.replica-label=replica
+        - --grpc-address=0.0.0.0:10901
+        - --http-address=0.0.0.0:9090
+        - --store=dnssrv+thanos-store-gateway:10901
+        ports:
+        - name: http
+          containerPort: 9090
+        - name: grpc
+          containerPort: 10901
+        livenessProbe:
+          httpGet:
+            port: http
+            path: /-/healthy
+        readinessProbe:
+          httpGet:
+            port: http
+            path: /-/ready
+        resources:
+          limits:
+            cpu: "1"
+            memory: 1Gi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: thanos-querier
+  name: thanos-querier
+  namespace: monitoring
+spec:
+  ports:
+  - port: 9090
+    protocol: TCP
+    targetPort: http
+    name: http
+  selector:
+    app: thanos-querier
